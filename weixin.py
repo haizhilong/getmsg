@@ -4,6 +4,7 @@ import useragent
 import requests
 import time
 import urllib
+import re
 from bs4 import BeautifulSoup
 
 
@@ -18,25 +19,29 @@ class mp(object):
 	def __init__(self,kw='',page=0):
 		self.kw=kw
 		self.page=page
+
+	def __call__(self):
+		for msg in self.msgs:
+			show=msg['name']+'\t'+msg['wxh']+'\t'+msg['company']+'\t'+msg['function']
+			print(show)
+
 	@property
 	def url(self):
-		temp="https://weixin.sogou.com/weixin?"+urllib.urlencode({'query':self.kw})+"&s_from=input&type=1&page={page}&ie=utf8".format(page=self.page)
-		print(temp)
-		return temp
+		return "https://weixin.sogou.com/weixin?query="+urllib.parse.quote(self.kw)+"&s_from=input&type=1&page={page}&ie=utf8".format(page=self.page)
 
 	@property
 	def soup(self):
 		content=requests.get(self.url,timeout=2,headers=self.headers).content
-		time.sleep(10)
+		time.sleep(5)
 		return BeautifulSoup(content,'lxml')
 
 	@property
 	def count(self):
-		total=[x for x in self.soup.select(".mun")][0].get_text()
-		return int(total.replace(u'找到约','').replace(u'条结果',''))
+		me=self.soup.find_all('div',class_='mun')[0].get_text()
+		return int(re.sub(r"\D", "", me))  
 
 	@property
-	def msg(self):
+	def msgs(self):
 		info=[x for x in self.soup.select(".news-list2 > li")]
 		cache=[]
 		for msg in info:
@@ -54,20 +59,32 @@ class mp(object):
 		return cache
 
 
+
 def info(kw=''):
-	pn=int(mp(kw,page=1).count/10)+1
+	index=mp(kw,page=1)
+	index()
+	pn=int(index.count/10)+1
 	print(kw+'\t'+str(pn))
 	data=[]
-	for x in xrange(1,pn):
-		index=mp(kw=kw,page=x)
-		with open('test.txt','a') as f:
-			for x in index.msg:
-				data.append(x)
-				msg=x['name']+'\t'+x['wxh']+'\t'+x['company']+'\t'+x['function']
-				f.write(msg+'\n')
-				f.flush()
-	return data
+	data.extend(index.msgs)
+	if pn==1:
+		return data
+	else:
+		for x in range(2,pn):
+			info=mp(kw=kw,page=x)
+			info()
+			data.extend(info.msgs)
+			with open('test.txt','a') as f:
+				for x in info.msgs:
+					data.append(x)
+					msg=x['name']+'\t'+x['wxh']+'\t'+x['company']+'\t'+x['function']
+					f.write(msg+'\n')
+					f.flush()
+		return data
 		
 
 if __name__ == '__main__':
-	print(info(kw='法律'))
+	# print(info(kw='小故事'))
+	index=mp(kw='小故事',page=1)
+	index()
+	print(index.count)
